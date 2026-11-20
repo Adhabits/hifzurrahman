@@ -361,9 +361,11 @@ h1,h2,.title,.m-name{font-family:'Instrument Serif',Georgia,serif;font-weight:40
 .hcard .vid{aspect-ratio:16/9;background:#000}
 .hcard .vid.live::after,.hcard .vid.live .play{display:none}
 .hcard .vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0;z-index:3}
-.unmute{position:absolute;z-index:5;top:12px;right:12px;display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:none;border-radius:980px;background:linear-gradient(180deg,#d8f865,#c6f432);color:#0b0b0c;font:700 .86rem 'Inter',sans-serif;cursor:pointer;box-shadow:0 10px 30px -8px rgba(198,244,50,.8);animation:pulseBtn 1.8s ease-in-out infinite}
-.unmute[hidden]{display:none}
-@keyframes pulseBtn{50%{transform:scale(1.06)}}
+.tapplay{position:absolute;inset:0;z-index:6;border:0;background:linear-gradient(180deg,rgba(0,0,0,.12),rgba(0,0,0,.55));color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font:600 .95rem 'Inter',sans-serif;cursor:pointer}
+.tapplay[hidden]{display:none}
+.tpi{position:relative;width:78px;height:78px;border-radius:50%;background:linear-gradient(180deg,#d8f865,#c6f432);box-shadow:0 0 0 0 rgba(198,244,50,.6);animation:tpPulse 1.8s ease-out infinite}
+.tpi::after{content:'';position:absolute;top:50%;left:50%;margin:-13px 0 0 -8px;border-left:22px solid #0b0b0c;border-top:13px solid transparent;border-bottom:13px solid transparent}
+@keyframes tpPulse{0%{box-shadow:0 0 0 0 rgba(198,244,50,.6)}80%,100%{box-shadow:0 0 0 22px rgba(198,244,50,0)}}
 /* phones: video comes right after the headline */
 @media(max-width:940px){
   .hero-grid{gap:0}
@@ -599,40 +601,54 @@ const FEEDBACK=[["https://i.postimg.cc/PJtN2tcP/nasreen-mam-finel.jpg","Nasreen"
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/* ============ hero video: autoplay WITH sound; if the browser blocks sound, plays muted and unmutes on the first tap ============ */
+/* ============ hero video: video + sound together. Tries autoplay with sound; if the browser blocks it, ONE tap starts video and sound together ============ */
 (function(){
-  $('#hcard').innerHTML='<div class="vid" id="vid"><img id="vthumb" alt="Video by Hifzurrahman" fetchpriority="high" referrerpolicy="no-referrer"><div class="play"></div><div id="ytp"></div><button type="button" class="unmute" id="unm" hidden>🔊 Tap to unmute</button></div><div class="cap"><span><b>Hifzurrahman urf Rahman</b></span><span>Skills mentor</span></div>';
+  $('#hcard').innerHTML='<div class="vid" id="vid"><img id="vthumb" alt="Video by Hifzurrahman" fetchpriority="high" referrerpolicy="no-referrer"><div class="play"></div><div id="ytp"></div><button type="button" class="tapplay" id="tp" hidden aria-label="Play video with sound"><span class="tpi"></span>Tap to play with sound</button></div><div class="cap"><span><b>Hifzurrahman urf Rahman</b></span><span>Skills mentor</span></div>';
   const v=$('#vid'),th=$('#vthumb'),unm=$('#unm');
   const chain=['maxresdefault','sddefault','hqdefault','mqdefault'];let k=0;
   th.onerror=()=>{if(++k<chain.length)th.src='https://i.ytimg.com/vi/'+VIDEO_ID+'/'+chain[k]+'.jpg'};
   th.onload=()=>{if(th.naturalWidth&&th.naturalWidth<200&&k<chain.length-1){k++;th.src='https://i.ytimg.com/vi/'+VIDEO_ID+'/'+chain[k]+'.jpg'}};
   th.src='https://i.ytimg.com/vi/'+VIDEO_ID+'/'+chain[0]+'.jpg';
 
-  let player=null,started=false,apiOk=false;
-  const showUnm=()=>{unm.hidden=false},hideUnm=()=>{unm.hidden=true};
-  function fallbackMuted(){try{player.mute();player.playVideo()}catch(e){}}
-  function unmuteNow(){
-    try{if(player&&player.isMuted&&player.isMuted()){player.unMute();player.setVolume(100);player.playVideo()}
-        if(player&&player.isMuted&&!player.isMuted()){hideUnm();['pointerdown','touchstart','keydown','click'].forEach(ev=>removeEventListener(ev,unmuteNow))}}catch(e){}
+  let player=null,started=false,apiOk=false,ready=false;
+  const tp=$('#tp');
+  const gestures=['pointerup','touchend','click','keydown'];
+  /* play video + sound together. Must run inside a tap/click (browser rule for sound). */
+  function playWithSound(){
+    try{if(player&&ready){player.unMute();player.setVolume(100);player.playVideo();return true}}catch(e){}
+    return false;
   }
+  function embedFallback(){
+    v.innerHTML='<iframe src="https://www.youtube.com/embed/'+VIDEO_ID+'?autoplay=1&rel=0&playsinline=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen title="Video"></iframe>';
+    v.classList.add('live');started=true;tp.hidden=true;stopListening();
+  }
+  function stopListening(){gestures.forEach(ev=>removeEventListener(ev,pageTap,true))}
+  function pageTap(e){
+    if(started){stopListening();return}
+    /* any first tap on plain page area (not on buttons/links/forms) starts video + sound */
+    if(e.target.closest&&e.target.closest('a,button,input,select,textarea,label,.modal,.bd,.lb'))return;
+    playWithSound();
+  }
+  gestures.forEach(ev=>addEventListener(ev,pageTap,true));
+  tp.addEventListener('click',e=>{e.stopPropagation();if(!playWithSound())embedFallback()});
+  v.addEventListener('click',()=>{if(!started&&!playWithSound()&&!player)embedFallback()});
   window.onYouTubeIframeAPIReady=function(){
     apiOk=true;
     player=new YT.Player('ytp',{videoId:VIDEO_ID,width:'100%',height:'100%',
       playerVars:{autoplay:1,playsinline:1,rel:0,modestbranding:1,controls:1},
       events:{
-        onReady:e=>{try{e.target.unMute();e.target.setVolume(100);e.target.playVideo()}catch(x){}
-                    setTimeout(()=>{if(!started)fallbackMuted()},1200)},
-        onAutoplayBlocked:()=>fallbackMuted(),
-        onStateChange:e=>{if(e.data===1){started=true;v.classList.add('live');try{player.isMuted()?showUnm():hideUnm()}catch(x){}}}
+        onReady:e=>{ready=true;
+          /* try to start with sound straight away (works when the browser allows it) */
+          try{e.target.unMute();e.target.setVolume(100);e.target.playVideo()}catch(x){}
+          setTimeout(()=>{if(!started)tp.hidden=false},1300)},
+        onAutoplayBlocked:()=>{if(!started)tp.hidden=false},
+        onStateChange:e=>{if(e.data===1){started=true;tp.hidden=true;v.classList.add('live');stopListening()}}
       }});
     window.__ytp=player;
   };
-  /* the first tap/click/key anywhere on the page switches the sound on */
-  ['pointerdown','touchstart','keydown','click'].forEach(ev=>addEventListener(ev,unmuteNow,{passive:true}));
-  unm.addEventListener('click',unmuteNow);
   const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';s.async=true;document.head.appendChild(s);
-  /* safety net: if the YouTube API cannot load, the thumbnail still plays on tap */
-  setTimeout(()=>{if(!apiOk){v.style.cursor='pointer';v.onclick=()=>{v.innerHTML='<iframe src="https://www.youtube.com/embed/'+VIDEO_ID+'?autoplay=1&rel=0&playsinline=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen title="Video"></iframe>';v.classList.add('live');v.onclick=null}}},4000);
+  /* safety net: if the YouTube API cannot load, a tap on the thumbnail still plays it */
+  setTimeout(()=>{if(!apiOk&&!started)tp.hidden=false},4000);
   $$('.lg-img').forEach(i=>{i.src=MENTOR_PICS[0];i.onerror=()=>i.remove()});
   const av=$('#avImg');av.src=MENTOR_PICS[0];av.onerror=()=>{$('#avBox').style.display='none'};
 })();

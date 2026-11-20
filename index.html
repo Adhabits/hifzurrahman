@@ -356,6 +356,22 @@ h1,h2,.title,.m-name{font-family:'Instrument Serif',Georgia,serif;font-weight:40
   .road.stk .ritem .node{position:static;margin-bottom:14px;width:40px;height:40px}
   .card h3{font-size:1.35rem}
 }
+
+/* ===== hero video (replaces the hero photo) ===== */
+.hcard .vid{aspect-ratio:16/9;background:#000}
+.hcard .vid.live::after,.hcard .vid.live .play{display:none}
+.hcard .vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0;z-index:3}
+.unmute{position:absolute;z-index:5;top:12px;right:12px;display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:none;border-radius:980px;background:linear-gradient(180deg,#d8f865,#c6f432);color:#0b0b0c;font:700 .86rem 'Inter',sans-serif;cursor:pointer;box-shadow:0 10px 30px -8px rgba(198,244,50,.8);animation:pulseBtn 1.8s ease-in-out infinite}
+.unmute[hidden]{display:none}
+@keyframes pulseBtn{50%{transform:scale(1.06)}}
+/* phones: video comes right after the headline */
+@media(max-width:940px){
+  .hero-grid{gap:0}
+  .hero-grid>div:first-child{display:contents}
+  .hero-grid .pill{order:1}.hero-grid h1{order:2}
+  .hero-grid .hcard{order:3;margin:6px 0 30px}
+  .hero-grid p.sub{order:4}.hero-grid .hero-btns{order:5}.hero-grid .who{order:6}
+}
 </style>
 </head>
 <body>
@@ -570,8 +586,7 @@ h1,h2,.title,.m-name{font-family:'Instrument Serif',Georgia,serif;font-weight:40
 
 <script>
 /* ================= CONFIG ================= */
-const HERO_PIC=-1;   /* -1 = hero photo rotates through all pics; or put a number 0-5 to fix the laptop pic (0 = 1st link, 1 = 2nd ...) */
-const HERO_MS=2600;
+const VIDEO_ID="G6w8VXqHNBI";   /* hero video (YouTube ID) */
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbxx-EHUUTiU6IQctDcT-KwpgndGWA_UXo84D1Y7MgqqgKeDsOv_DCUvCGM8mRVPifRDXQ/exec";
 const CHANNEL_URL="https://chat.whatsapp.com/KmJ4NOTuZNU2n8OCjuEiaW";
 const CLIENT="Hifzurrahman-Lime";
@@ -584,14 +599,40 @@ const FEEDBACK=[["https://i.postimg.cc/PJtN2tcP/nasreen-mam-finel.jpg","Nasreen"
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/* ============ hero card: long video, or mentor photo if no video yet ============ */
+/* ============ hero video: autoplay WITH sound; if the browser blocks sound, plays muted and unmutes on the first tap ============ */
 (function(){
-  const hc=$('#hcard');
-  hc.innerHTML='<div class="photo" id="hph"></div><div class="cap"><span><b>Hifzurrahman urf Rahman</b></span><span>Skills mentor</span></div>';
-  const ph=$('#hph');let cur=-1;
-  const imgs=MENTOR_PICS.map((u,i)=>{const im=new Image();im.src=u;im.alt='Hifzurrahman urf Rahman';im.referrerPolicy='no-referrer';im.decoding='async';if(i===0)im.fetchPriority='high';im.onerror=()=>{im.dataset.bad=1;if(cur===i)nx()};ph.appendChild(im);return im});
-  function nx(){const ok=imgs.map((_,i)=>i).filter(i=>!imgs[i].dataset.bad);if(!ok.length)return;const n=(HERO_PIC>=0&&!imgs[HERO_PIC].dataset.bad)?HERO_PIC:ok[(Math.max(ok.indexOf(cur),-1)+1)%ok.length];imgs.forEach((im,i)=>im.classList.toggle('on',i===n));cur=n}
-  nx();if(HERO_PIC<0)setInterval(nx,HERO_MS);
+  $('#hcard').innerHTML='<div class="vid" id="vid"><img id="vthumb" alt="Video by Hifzurrahman" fetchpriority="high" referrerpolicy="no-referrer"><div class="play"></div><div id="ytp"></div><button type="button" class="unmute" id="unm" hidden>🔊 Tap to unmute</button></div><div class="cap"><span><b>Hifzurrahman urf Rahman</b></span><span>Skills mentor</span></div>';
+  const v=$('#vid'),th=$('#vthumb'),unm=$('#unm');
+  const chain=['maxresdefault','sddefault','hqdefault','mqdefault'];let k=0;
+  th.onerror=()=>{if(++k<chain.length)th.src='https://i.ytimg.com/vi/'+VIDEO_ID+'/'+chain[k]+'.jpg'};
+  th.onload=()=>{if(th.naturalWidth&&th.naturalWidth<200&&k<chain.length-1){k++;th.src='https://i.ytimg.com/vi/'+VIDEO_ID+'/'+chain[k]+'.jpg'}};
+  th.src='https://i.ytimg.com/vi/'+VIDEO_ID+'/'+chain[0]+'.jpg';
+
+  let player=null,started=false,apiOk=false;
+  const showUnm=()=>{unm.hidden=false},hideUnm=()=>{unm.hidden=true};
+  function fallbackMuted(){try{player.mute();player.playVideo()}catch(e){}}
+  function unmuteNow(){
+    try{if(player&&player.isMuted&&player.isMuted()){player.unMute();player.setVolume(100);player.playVideo()}
+        if(player&&player.isMuted&&!player.isMuted()){hideUnm();['pointerdown','touchstart','keydown','click'].forEach(ev=>removeEventListener(ev,unmuteNow))}}catch(e){}
+  }
+  window.onYouTubeIframeAPIReady=function(){
+    apiOk=true;
+    player=new YT.Player('ytp',{videoId:VIDEO_ID,width:'100%',height:'100%',
+      playerVars:{autoplay:1,playsinline:1,rel:0,modestbranding:1,controls:1},
+      events:{
+        onReady:e=>{try{e.target.unMute();e.target.setVolume(100);e.target.playVideo()}catch(x){}
+                    setTimeout(()=>{if(!started)fallbackMuted()},1200)},
+        onAutoplayBlocked:()=>fallbackMuted(),
+        onStateChange:e=>{if(e.data===1){started=true;v.classList.add('live');try{player.isMuted()?showUnm():hideUnm()}catch(x){}}}
+      }});
+    window.__ytp=player;
+  };
+  /* the first tap/click/key anywhere on the page switches the sound on */
+  ['pointerdown','touchstart','keydown','click'].forEach(ev=>addEventListener(ev,unmuteNow,{passive:true}));
+  unm.addEventListener('click',unmuteNow);
+  const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';s.async=true;document.head.appendChild(s);
+  /* safety net: if the YouTube API cannot load, the thumbnail still plays on tap */
+  setTimeout(()=>{if(!apiOk){v.style.cursor='pointer';v.onclick=()=>{v.innerHTML='<iframe src="https://www.youtube.com/embed/'+VIDEO_ID+'?autoplay=1&rel=0&playsinline=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen title="Video"></iframe>';v.classList.add('live');v.onclick=null}}},4000);
   $$('.lg-img').forEach(i=>{i.src=MENTOR_PICS[0];i.onerror=()=>i.remove()});
   const av=$('#avImg');av.src=MENTOR_PICS[0];av.onerror=()=>{$('#avBox').style.display='none'};
 })();
@@ -599,6 +640,7 @@ const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* ============ lightbox ============ */
 const lb=$('#lb'),lbin=$('#lbin');
 function openLB(kind,src){
+  try{window.__ytp&&window.__ytp.pauseVideo()}catch(e){}
   lbin.innerHTML="";
   if(kind==='img'){const i=new Image();i.src=src;i.referrerPolicy='no-referrer';lbin.appendChild(i)}
   else{const f=document.createElement('iframe');f.src='https://www.youtube.com/embed/'+src+'?autoplay=1&rel=0&playsinline=1';f.allow='autoplay; encrypted-media; fullscreen';f.allowFullscreen=true;f.title='Community video';lbin.appendChild(f)}
@@ -703,7 +745,7 @@ $$('.q button').forEach(b=>b.onclick=()=>{const q=b.parentElement,was=q.classLis
 
 /* ============ modals ============ */
 const bd=$('#bd'),fm=$('#fm'),pm=$('#pm'),form=$('#form'),src=$('#src'),formView=$('#formView'),okView=$('#okView');
-function openF(s){src.value=s||'Website';formView.style.display='';okView.classList.remove('show');bd.classList.add('show');fm.classList.add('show');document.body.style.overflow='hidden'}
+function openF(s){try{window.__ytp&&window.__ytp.pauseVideo()}catch(e){}src.value=s||'Website';formView.style.display='';okView.classList.remove('show');bd.classList.add('show');fm.classList.add('show');document.body.style.overflow='hidden'}
 function closeAll(){bd.classList.remove('show');fm.classList.remove('show');pm.classList.remove('show');document.body.style.overflow='';closeLB()}
 document.addEventListener('click',e=>{const t=e.target.closest('.open-any');if(t){e.preventDefault();openF(t.dataset.source)}});
 $('#fx').onclick=closeAll;$('#px').onclick=closeAll;bd.onclick=closeAll;
